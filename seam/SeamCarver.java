@@ -1,0 +1,175 @@
+package seam;
+
+import edu.princeton.cs.algs4.Picture;
+import edu.princeton.cs.algs4.Stack;
+
+import java.awt.Color;
+
+public class SeamCarver {
+    private Picture picture;
+    private int w,h;
+    private boolean transposed;
+
+    public SeamCarver(Picture picture) {
+        if (picture == null) throw new IllegalArgumentException();
+        this.picture = new Picture(picture);
+        transposed = false;
+        w = picture.width();
+        h = picture.height();
+    }
+
+    public Picture picture() {
+        transpose(true);
+        return new Picture(this.picture);
+    }
+
+    private void transpose(boolean reset) {
+        if (transposed && reset || !transposed && !reset) rotatePic();
+    }
+
+    private void rotatePic() {
+        Picture newPic = new Picture(h, w);
+        for (int i = 0; i < h; i++) {
+            for (int j = 0; j < w; j++) {
+                newPic.setRGB(i, j, picture.getRGB(j, i));
+            }
+        }
+        picture = newPic;
+        w = picture.width();
+        h = picture.height();
+        transposed = !transposed;
+    }
+
+    public int width() {
+        return transposed ? h : w;
+    }
+
+    public int height() {
+        return transposed ? w : h;
+    }
+
+    public double energy(int x, int y) {
+        transpose(true);
+        if (x < 0 || y < 0 || x >= w || y >= h) throw new IllegalArgumentException();
+
+        return energyVal(x, y);
+    }
+
+    private double energyVal(int x, int y) {
+        if (x == 0 || y == 0 || x == w - 1 || y == h - 1) return 1000;
+        return Math.sqrt(
+            squareDelta(picture.get(x, y - 1), picture.get(x, y + 1)) +
+            squareDelta(picture.get(x - 1, y), picture.get(x + 1, y))
+        );
+    }
+
+    private double squareDelta(Color c1, Color c2) {
+        return
+                Math.pow(c1.getRed() - c2.getRed(), 2) +
+                        Math.pow(c1.getBlue() - c2.getBlue(), 2) +
+                        Math.pow(c1.getGreen() - c2.getGreen(), 2);
+    }
+
+    public int[] findHorizontalSeam() {
+        transpose(false);
+
+        return asp();
+    }
+
+    public int[] findVerticalSeam() {
+        transpose(true);
+
+        return asp();
+    }
+
+    private int[] asp() {
+        int[] seam = new int[h];
+        double[] distTo = new double[w * h + 2];
+        int[] edgeTo = new int[w * h + 2];
+        double[] energy = new double[w * h + 2];
+        for (int i = 0; i < distTo.length; i++) {
+            distTo[i] = Double.POSITIVE_INFINITY;
+            if (i == 0 || i == distTo.length - 1) energy[i] = 0;
+            else energy[i] = energyVal((i - 1) % w, Math.floorDiv(i - 1, w));
+        }
+        distTo[0] = 0;
+        for (int v = 0 ; v < distTo.length; v++) {
+            for (int w : adj(v)) {
+                if (distTo[w] > distTo[v] + energy[w]) {
+                    distTo[w] = distTo[v] + energy[w];
+                    edgeTo[w] = v;
+                }
+            }
+        }
+
+        int idx = h - 1;
+        for (int i = edgeTo[edgeTo.length - 1]; i != 0; i = edgeTo[i]) {
+            seam[idx] = (i - 1) % w;
+            idx--;
+        }
+
+        return seam;
+    }
+
+    // Find all adjacent vertices / pixels
+    private Iterable<Integer> adj(int v) {
+        // target vertex index
+        int t = w * h + 1;
+        int col = (v - 1) % w, row = Math.floorDiv(v - 1, w);
+        Stack<Integer> adj = new Stack<>();
+        // If source vertex, then add all first row / col pixels / vertices
+        if (v == 0) {
+            for (int i = 0; i < w; i++) {
+                int vn = i + 1;
+                adj.push(vn);
+            }
+        }
+        // If last row then add target vertex
+        else if (row == h - 1) {
+            adj.push(t);
+        }
+        // Else if vertex not target
+        else if (v != t) {
+            if (col > 0) adj.push(v + w - 1);
+            adj.push(v + w);
+            if (col < w - 2) adj.push(v + w + 1);
+        }
+
+        return adj;
+    }
+
+    public void removeHorizontalSeam(int[] seam) {
+        transpose(false);
+        removeSeam(seam);
+    }
+
+    public void removeVerticalSeam(int[] seam) {
+        transpose(true);
+        removeSeam(seam);
+    }
+
+    private void removeSeam(int[] seam) {
+        checkSeam(seam);
+        Picture newPic = new Picture(w - 1, h);
+        for (int i = 0; i < h; i++) {
+            int k = 0;
+            for (int j = 0; j < w; j++) {
+                if (j == seam[i]) continue;
+                newPic.setRGB(k, i, picture.getRGB(j, i));
+                k++;
+            }
+        }
+        w--;
+        picture = newPic;
+    }
+
+    private void checkSeam(int [] seam) {
+        if (seam == null || w < 2 || seam.length != h) throw new IllegalArgumentException();
+
+        for(int i = 0; i < seam.length; i++) {
+            int si = seam[i];
+            if (si < 0 || si >= w) throw new IllegalArgumentException();
+            if (i > 0 && Math.abs(si - seam[i - 1]) > 1) throw new IllegalArgumentException();
+        }
+    }
+}
